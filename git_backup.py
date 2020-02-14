@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import pwnagotchi.plugins as plugins
+from pwnagotchi.utils import StatusFile
 from pwnagotchi.ui.components import LabeledValue
 from pwnagotchi.ui.view import BLACK
 import pwnagotchi.ui.fonts as fonts
@@ -25,10 +26,6 @@ class GitBackup(plugins.Plugin):
 
     # called when the plugin is loaded
     def on_loaded(self):
-        for opt in ['files', 'interval', 'commands', 'max_tries']:
-            if opt not in self.options or (opt in self.options and self.options[opt] is None):
-                logging.error(f"AUTO-BACKUP: Option {opt} is not set.")
-                return
         self.ready = True
         logging.info("GIT-BACKUP: Successfully loaded.")
     
@@ -40,40 +37,28 @@ class GitBackup(plugins.Plugin):
     def on_internet_available(self, agent):
         if not self.ready:
             return
-
-        if self.options['max_tries'] and self.tries >= self.options['max_tries']:
+        if self.tries >= 2:
             return
 
         if self.status.newer_then_days(self.options['interval']):
             return
-
-        # Only backup existing files to prevent errors
-        existing_files = list(filter(lambda f: os.path.exists(f), self.options['files']))
-        files_to_backup = " ".join(existing_files)
-
         try:
             f = open("/home/pi/git_err.txt", "a+")
             display = agent.view()
-
             logging.info("GITBACKUP: Backing up ...")
             display.set('status', 'Backing up ...')
             display.update()
-
-            for cmd in self.options['commands']:
-                logging.info(f"AUTO-BACKUP: Running {cmd.format(files=files_to_backup)}")
-                process = subprocess.Popen(['sudo cp -r /root/brain.nn /root/brain.json /root/.api-report.json /root/handshakes/ /root/peers/ /etc/pwnagotchi/ /var/log/pwnagotchi.log /root/Pwnagotchi/ && cd /root/Pwnagotchi/ && git pull && git add . && git commit -am "backup" && git push'], shell=True, stderr=f, stdin=f)
-                process.wait()
-                if process.returncode > 0:
-                    raise OSError(f"Command failed (rc: {process.returncode})")
-
+            logging.info(f"GIT-BACKUP: Running")
+            process = subprocess.Popen(['sudo cp -r /root/brain.nn /root/brain.json /root/.api-report.json /root/handshakes/ /root/peers/ /etc/pwnagotchi/ /var/log/pwnagotchi.log /root/Pwnagotchi/ && cd /root/Pwnagotchi/ && sudo git pull && sudo  git add . && sudo  git commit -am "backup" && sudo git push'], shell=True, stderr=f, stdin=f)
+            process.wait()
             f.close()
-            logging.info("AUTO-BACKUP: backup done")
-            display.set('status', 'Backup done!')
+            logging.info("GIT-BACKUP: backup done")
+            display.set('status', 'GIT-Backup done!')
             display.update()
             self.status.update()
         except OSError as os_e:
             self.tries += 1
-            logging.info(f"AUTO-BACKUP: Error: {os_e}")
+            logging.info(f"GIT-BACKUP: Error: {os_e}")
             display.set('status', 'Backup failed!')
             display.update()
     # called to setup the ui elements
